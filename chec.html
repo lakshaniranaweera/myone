@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Memory Game</title>
+<link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Bangers&display=swap" rel="stylesheet">
+
+<style>
+body, html {
+    margin:0;
+    padding:0;
+    width:100%;
+    height:100%;
+    font-family:Arial,sans-serif;
+    text-align:center;
+    overflow:hidden;
+}
+
+#videoPage,#startPage,#gamePage,.winnerPage,#adminPage{
+    display:none;
+    top:0;left:0;
+    width:100%;
+    height:100%;
+    position:absolute;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+    background-size:100% 100%;
+}
+
+#videoPage { display:flex; background:#000; }
+#videoPage video { width:100%; height:100%; object-fit:cover; }
+
+#startPage { display:flex; flex-direction:column; justify-content:center; align-items:center; }
+#startPage video {
+    position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:-1;
+}
+
+#gamePage { flex-direction:column; background:url('back1.png') no-repeat center/cover; }
+
+.grid { display:grid; grid-template-columns:repeat(4,160px); grid-gap:100px; padding-right:75px; margin-top:60px; }
+.card { width:240px; height:240px; perspective:1000px; cursor:pointer; position:relative; }
+.card-inner { width:100%; height:100%; position:relative; transform-style:preserve-3d; transition:0.3s; }
+.card.flipped .card-inner { transform:rotateY(180deg); }
+.card-front,.card-back { position:absolute; width:100%; height:100%; backface-visibility:hidden; border-radius:10px; }
+.card-back { transform:rotateY(180deg); background-size:cover; background-position:center; }
+
+.winnerPage {
+    display:none;
+    position:absolute;
+    width:100%;
+    height:100%;
+    top:0; left:0;
+    justify-content:center;
+    align-items:center;
+    background:#000;
+}
+
+.winnerPage video {
+    width:100%;
+    height:100%;
+    object-fit:cover;
+}
+
+#countdown {
+    position:absolute;
+    bottom:300px;
+    font-size:90px;
+    font-weight:bold;
+    color:#fff;
+    text-shadow:2px 2px 5px #000;
+}
+
+.grid .card .card-front {
+  background-image: url('logo.png');
+  background-repeat:no-repeat;
+  background-position:center;
+  background-size:cover;
+}
+
+#adminPage { display:none; background:#222; color:#fff; z-index:9999; }
+#adminPage h1 { font-size:50px; margin-bottom:30px; }
+#adminForm { width:600px; display:flex; flex-direction:column; gap:15px; }
+#adminForm label { font-size:24px; display:flex; justify-content:space-between; }
+#adminForm input { font-size:22px; width:120px; text-align:center; padding:5px; }
+#adminForm button { padding:15px; font-size:28px; background:#28a745; color:#fff; border-radius:20px; }
+
+#settingsIcon {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 48px;
+  color: white;
+  cursor: pointer;
+  z-index: 10000;
+}
+</style>
+</head>
+<body>
+
+<!-- SETTINGS -->
+<div id="settingsIcon" onclick="openAdmin()">⚙️</div>
+
+<!-- AUDIO -->
+<audio id="pageSound" src="page.mp3" loop></audio>
+<audio id="selectSound" src="select.mp3"></audio>
+<audio id="winnerSound" src="winner.mp3"></audio>
+<audio id="lossSound" src="loss.mp3"></audio>
+
+<!-- ADMIN PAGE -->
+<div id="adminPage">
+  <h1>Game Settings</h1>
+  <form id="adminForm">
+    <label>Winner: <input type="number" id="prizeDrink"></label>
+    <label>Game Time (seconds): <input type="number" id="gameTime"></label>
+    <button type="button" onclick="saveAdminSettings()">Save Settings</button>
+  </form>
+</div>
+
+<!-- INTRO VIDEO PAGE -->
+<div id="videoPage">
+  <video autoplay id="introVideo" muted loop>
+    <source src="intro2.mp4" type="video/mp4">
+  </video>
+</div>
+
+<!-- START PAGE -->
+<div id="startPage">
+  <video autoplay muted loop>
+    <source src="back.mp4" type="video/mp4">
+  </video>
+</div>
+
+<!-- GAME PAGE -->
+<div id="gamePage">
+  <h2></h2>
+  <br><br>
+  <div class="grid" id="gameBoard"></div>
+  <div id="countdown">20</div>
+</div>
+
+<!-- VIDEO RESULT PAGES -->
+<div id="winnerDrink" class="winnerPage">
+    <video autoplay muted loop>
+        <source src="win.mp4" type="video/mp4">
+    </video>
+</div>
+
+<div id="timeoutPage" class="winnerPage">
+    <video autoplay muted loop>
+        <source src="loss.mp4" type="video/mp4">
+    </video>
+</div>
+
+<div id="noGiftPage" class="winnerPage">
+    <video autoplay muted loop>
+        <source src="loss.mp4" type="video/mp4">
+    </video>
+</div>
+
+<script>
+/* Cookies */
+function setCookie(n,v,d){ const t=new Date(); t.setTime(t.getTime()+(d*86400000)); document.cookie=n+"="+JSON.stringify(v)+";expires="+t.toUTCString()+";path=/"; }
+function getCookie(n){ const c=document.cookie.split("; ").find(r=>r.startsWith(n+"=")); return c?JSON.parse(c.split("=")[1]):null; }
+
+let defaultPrizes={ "Winner":0 };
+let defaultTime=20;
+
+let prizes=getCookie("prizes")||defaultPrizes;
+let gameTime=getCookie("gameTime")||defaultTime;
+
+function loadAdminForm(){
+  document.getElementById("prizeDrink").value=prizes["Winner"];
+  document.getElementById("gameTime").value=gameTime;
+}
+
+function saveAdminSettings(){
+  prizes={ "Winner":parseInt(document.getElementById("prizeDrink").value) };
+  gameTime=parseInt(document.getElementById("gameTime").value);
+  setCookie("prizes",prizes,7);
+  setCookie("gameTime",gameTime,7);
+  document.getElementById("adminPage").style.display="none";
+}
+
+function openAdmin(){ loadAdminForm(); document.getElementById("adminPage").style.display="flex"; }
+
+window.onload=()=>{
+  document.getElementById("videoPage").style.display="flex";
+  document.getElementById("introVideo").play();
+
+  pageSound.play();
+
+  document.getElementById("videoPage").addEventListener("click", goStart);
+  document.getElementById("startPage").addEventListener("click", startGame);
+};
+
+let selectedCards=[], matchedPairs=0, countdown=20, countdownInterval;
+
+const pageSound=document.getElementById("pageSound");
+const selectSound=document.getElementById("selectSound");
+const winnerSound=document.getElementById("winnerSound");
+const lossSound=document.getElementById("lossSound");
+
+function goStart(){
+  document.getElementById("videoPage").style.display="none";
+  document.getElementById("startPage").style.display="flex";
+
+  pageSound.play();
+}
+
+function startGame(){
+  document.getElementById("startPage").style.display="none";
+  document.getElementById("gamePage").style.display="flex";
+
+  pageSound.play();
+  initBoard();
+  startCountdown();
+}
+
+function initBoard(){
+  matchedPairs=0; selectedCards=[];
+  const images=["1.png","2.png","3.png","4.png","5.png","6.png"];
+  const cardImages=[...images,...images].sort(()=>0.5-Math.random());
+  const board=document.getElementById("gameBoard");
+  board.innerHTML="";
+  cardImages.forEach(img=>{
+    const card=document.createElement("div");
+    card.classList.add("card");
+    card.innerHTML=`<div class="card-inner"><div class="card-front"></div><div class="card-back" style="background-image:url('${img}')"></div></div>`;
+    board.appendChild(card);
+    card.addEventListener("click",()=>flipCard(card,img));
+  });
+}
+
+function flipCard(card,img){
+  if(selectedCards.length<2 && !card.classList.contains("flipped")){
+    card.classList.add("flipped","selected");
+    selectSound.play();
+    selectedCards.push({card,img});
+    if(selectedCards.length===2) setTimeout(checkMatch,400);
+  }
+}
+
+function checkMatch(){
+  const [a,b]=selectedCards;
+  if(a.img===b.img){
+    matchedPairs++;
+    if(matchedPairs===6){
+      clearInterval(countdownInterval);
+      showWinner();
+    }
+  } else {
+    a.card.classList.remove("flipped","selected");
+    b.card.classList.remove("flipped","selected");
+  }
+  selectedCards=[];
+}
+
+function startCountdown(){
+  countdown=gameTime;
+  document.getElementById("countdown").innerText=countdown;
+  countdownInterval=setInterval(()=>{
+    countdown--;
+    document.getElementById("countdown").innerText=countdown;
+    if(countdown<=0){ clearInterval(countdownInterval); showTimeout(); }
+  },1000);
+}
+
+function showWinner(){
+  pageSound.pause();
+  winnerSound.play();
+
+  document.getElementById("gamePage").style.display="none";
+
+  let available=Object.entries(prizes).filter(([_,x])=>x>0);
+  if(available.length===0){ showNoGift(); return; }
+
+  prizes["Drink Coupon"]--;
+  setCookie("prizes",prizes,7);
+
+  const p=document.getElementById("winnerDrink");
+  p.style.display="flex";
+  p.onclick=()=>goVideo();
+}
+
+function showTimeout(){
+  pageSound.pause();
+  lossSound.play();
+
+  document.getElementById("gamePage").style.display="none";
+
+  const p=document.getElementById("timeoutPage");
+  p.style.display="flex";
+  p.onclick=()=>goVideo();
+}
+
+function showNoGift(){
+  pageSound.pause();
+  lossSound.play();
+
+  const p=document.getElementById("noGiftPage");
+  p.style.display="flex";
+  p.onclick=()=>goVideo();
+}
+
+function goVideo(){
+  document.querySelectorAll(".winnerPage").forEach(x=>x.style.display="none");
+  document.getElementById("videoPage").style.display="flex";
+  document.getElementById("introVideo").play();
+
+  pageSound.play();
+}
+</script>
+</body>
+</html>
